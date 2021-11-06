@@ -1,8 +1,8 @@
 /*This file evaluates the performance of the A/B test.
 Since, the goal is to facilitate users into getting to another shop, the conversion for this test will be  when user selected a suggested shop from the list shown.
-/*
+*/
 
-/*In this part we calculate how many conversions we had in each variation group/*
+/*In this part we calculate how many conversions we had in each variation group*/
 
 SELECT 
     variation_name
@@ -15,7 +15,7 @@ WHERE
 GROUP BY
     variation_name
     
-/*In this part we calculate the conversion rate we had in each variation group/*   
+/*In this part we calculate the conversion rate we had in each variation group*/  
 
 WITH total_sessions AS (
     SELECT   
@@ -41,7 +41,7 @@ GROUP BY
     b.variation_name
     ,a.total
     
-/*Part of the test validation is to check if amount of users is (as much as possible) equally splited per variation./*   
+/*Part of the test validation is to check if amount of users is (as much as possible) equally splited per variation.*/   
 
 SELECT 
     variation_name
@@ -51,7 +51,7 @@ FROM
 GROUP BY
     variation_name
     
-/* Max and min date per variation/*    
+/* Max and min date per variation*/    
 
 SELECT 
     variation_name
@@ -62,7 +62,7 @@ FROM
 GROUP BY 
     variation_name 
 
-/* Check if any variation is been found on a specific browser/* 
+/* Check if any variation is been found on a specific browser*/ 
 
 SELECT 
     appBrowser
@@ -80,7 +80,7 @@ ORDER BY
 /* Finallly, we need to calculate the confidence intervals of the difference of the conversion rate for the two groups and test 
 whether or not this confidence interval is statistically significant. In simple terms, the more data you have, 
 the tighter the confidence interval, and the more it is more robust that percentage point difference in a test is real and not a statistical accident.
-There are different ways to do that. We wiill do this by using the Adjusted Wald Method. /*
+There are different ways to do that. We wiill do this by using the Adjusted Wald Method.*/
 
 WITH
   ab_test_conversions AS (
@@ -135,7 +135,7 @@ SELECT
 FROM
   conversion_rate_standard_error
     
-/* Is there any improvement for users that are New to the platform? /*
+/* Is there any improvement for users that are New to the platform? */
 
 WITH total_sessions AS (
     SELECT   
@@ -163,7 +163,7 @@ GROUP BY
     ,a.total
     ,b.visitType
     
-/* Maybe, users that come from google/cpc to the platform and to a shop have different results compared to the rest group of users? /*
+/* Maybe, users that come from google/cpc to the platform and to a shop have different results compared to the rest group of users? */
 
  WITH total_sessions AS (
     SELECT   
