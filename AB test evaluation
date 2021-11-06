@@ -1,0 +1,196 @@
+/*This file evaluates the performance of the A/B test.
+Since, the goal is to facilitate users into getting to another shop, the conversion for this test will be  when user selected a suggested shop from the list shown.
+/*
+
+/*In this part we calculate how many conversions we had in each variation group/*
+
+SELECT 
+    variation_name
+    ,count(distinct session_id) As amount_of_conversions -- Amount of conversions
+FROM 
+    `product-analytics-test.pa_dataset.experiment_data_10395400658`  
+WHERE 
+    event_key = 'suggested_shop.clicked' -- Select event of getting to another shop
+    AND events >0 -- Event happend at least one time
+GROUP BY
+    variation_name
+    
+/*In this part we calculate the conversion rate we had in each variation group/*   
+
+WITH total_sessions AS (
+    SELECT   
+        variation_name
+        ,count(distinct session_id) as total 
+    FROM 
+        `product-analytics-test.pa_dataset.experiment_data_10395400658` 
+    GROUP BY 
+        variation_name)
+SELECT 
+    b.variation_name
+    ,ROUND(COUNT(DISTINCT session_id)  / a.total,3) AS conversion_rate -- Round in 3 digits for simplicity
+FROM 
+    `product-analytics-test.pa_dataset.experiment_data_10395400658` AS b
+JOIN    
+    total_sessions AS a 
+ON 
+    b.variation_name=a.variation_name
+WHERE 
+    b.event_key = 'suggested_shop.clicked'
+    AND events>0
+GROUP BY
+    b.variation_name
+    ,a.total
+    
+/*Part of the test validation is to check if amount of users is (as much as possible) equally splited per variation./*   
+
+SELECT 
+    variation_name
+    ,COUNT(DISTINCT LEFT(session_id, STRPOS(session_id,'.')-1) ) AS Amount_of_users -- Count of distinct userID
+FROM 
+    `product-analytics-test.pa_dataset.experiment_data_10395400658`
+GROUP BY
+    variation_name
+    
+/* Max and min date per variation/*    
+
+SELECT 
+    variation_name
+    , min(date) AS min_date
+    , max(date) AS max_date
+FROM 
+    `product-analytics-test.pa_dataset.experiment_data_10395400658`
+GROUP BY 
+    variation_name 
+
+/* Check if any variation is been found on a specific browser/* 
+
+SELECT 
+    appBrowser
+    ,variation_name
+    ,count(distinct session_id) AS number_of_sessions
+FROM 
+    `product-analytics-test.pa_dataset.experiment_data_10395400658` 
+GROUP BY 
+    appBrowser
+    ,variation_name
+ORDER BY 
+    number_of_sessions DESC 
+    
+
+/* Finallly, we need to calculate the confidence intervals of the difference of the conversion rate for the two groups and test 
+whether or not this confidence interval is statistically significant. In simple terms, the more data you have, 
+the tighter the confidence interval, and the more it is more robust that percentage point difference in a test is real and not a statistical accident.
+There are different ways to do that. We wiill do this by using the Adjusted Wald Method. /*
+
+WITH
+  ab_test_conversions AS (
+SELECT 
+    variation_name
+    , count(distinct session_id) As amount_of_conversions --Amount of conversions
+FROM 
+    `product-analytics-test.pa_dataset.experiment_data_10395400658`  
+WHERE 
+    event_key = 'suggested_shop.clicked' -- Select event of getting to another shop
+    AND events >1
+GROUP BY
+    variation_name
+  )
+  ,ab_test_entrants as (
+SELECT 
+    variation_name
+    , count(distinct session_id) As amount_of_sessions --Amount of sessions
+FROM 
+    `product-analytics-test.pa_dataset.experiment_data_10395400658`  
+GROUP BY
+    variation_name
+  )
+, ab_test_conversion_rates as (
+SELECT
+  te.variation_name
+  , amount_of_sessions
+  , amount_of_conversions
+  , (amount_of_conversions + 1.92) / (amount_of_sessions + 3.84 ) as conversion_rate
+FROM
+  ab_test_conversions AS tc
+LEFT JOIN 
+  ab_test_entrants AS te
+ON 
+  tc.variation_name=te.variation_name)
+, conversion_rate_standard_error as (
+SELECT
+  variation_name
+  , amount_of_sessions
+  , amount_of_conversions
+  , conversion_rate
+  , sqrt(conversion_rate * (1 - conversion_rate) / amount_of_sessions) as standard_error
+FROM
+  ab_test_conversion_rates)
+SELECT
+ variation_name
+  , amount_of_sessions
+  , amount_of_conversions
+  , conversion_rate - standard_error * 1.96 as conversion_rate_low
+  , conversion_rate
+  , conversion_rate + standard_error * 1.96 as conversion_rate_high
+FROM
+  conversion_rate_standard_error
+    
+/* Is there any improvement for users that are New to the platform? /*
+
+WITH total_sessions AS (
+    SELECT   
+        variation_name
+        ,count(distinct session_id) as total 
+    FROM 
+        `product-analytics-test.pa_dataset.experiment_data_10395400658` 
+    GROUP BY 
+        variation_name)
+SELECT 
+    b.visitType
+    ,b.variation_name
+    ,ROUND(count(distinct session_id)/ a.total,3) AS conversion_rate
+FROM 
+    `product-analytics-test.pa_dataset.experiment_data_10395400658` AS b
+JOIN    
+    total_sessions AS a 
+ON 
+    b.variation_name=a.variation_name
+WHERE 
+    b.event_key = 'suggested_shop.clicked'
+    AND events>0
+GROUP BY
+    b.variation_name
+    ,a.total
+    ,b.visitType
+    
+/* Maybe, users that come from google/cpc to the platform and to a shop have different results compared to the rest group of users? /*
+
+ WITH total_sessions AS (
+    SELECT   
+        variation_name
+        ,count(distinct session_id) as total 
+    FROM 
+        `product-analytics-test.pa_dataset.experiment_data_10395400658` 
+    GROUP BY 
+        variation_name)
+SELECT 
+    b.variation_name
+    , CASE WHEN source='google' AND medium='cpc' THEN 'google/cpc'
+    ELSE 'rest' 
+    END AS source_medium
+    ,ROUND(count(distinct session_id)/ a.total,3) AS conversion_rate
+FROM 
+    `product-analytics-test.pa_dataset.experiment_data_10395400658` AS b
+JOIN    
+    total_sessions AS a 
+ON 
+    b.variation_name=a.variation_name
+WHERE 
+    b.event_key = 'suggested_shop.clicked'
+    AND events>0
+GROUP BY
+    b.variation_name
+    ,a.total
+    ,source_medium
+ORDER BY 
+    b.variation_name
